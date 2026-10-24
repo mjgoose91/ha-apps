@@ -8,8 +8,13 @@ export PM2_HOME=/tmp/pm2
 node <<'NODE'
 const fs = require('node:fs')
 
-try {
+async function main() {
   const options = JSON.parse(fs.readFileSync('/data/options.json', 'utf8'))
+  // Existing installations may not yet have Supervisor's new option default.
+  const autoGenerate = options.auto_generate_us_channels ?? false
+  if (typeof autoGenerate !== 'boolean') {
+    throw new Error('auto_generate_us_channels must be true or false')
+  }
   if (typeof options.run_at_startup !== 'boolean') {
     throw new Error('run_at_startup must be true or false')
   }
@@ -36,14 +41,23 @@ try {
   }
 
   fs.mkdirSync('/data/public', { recursive: true })
+  const channels = autoGenerate ? '/data/public/us.channels.xml' : '/data/public/channels.xml'
+  if (autoGenerate) {
+    try {
+      await require('/epg/generate-us-channels.cjs').generateUSChannels()
+    } catch (error) {
+      if (options.run_at_startup || schedule) throw error
+      console.error(`US channel generation failed: ${error.message}. No grabs enabled; continuing to serve existing files. Check the coverage report timestamp before using generated mappings.`)
+    }
+  }
+  console.log(`Channel configuration: ${channels}`)
   if (options.run_at_startup || schedule) {
     try {
-      const channels = '/data/public/channels.xml'
       if (!fs.statSync(channels).isFile() || !fs.readFileSync(channels, 'utf8').trim()) {
         throw new Error('not a nonempty file')
       }
     } catch {
-      throw new Error('Grabbing requires a nonempty /data/public/channels.xml. Supply an iptv-org channel list, or disable run_at_startup and clear schedule for serve-only mode.')
+      throw new Error(`Grabbing requires a nonempty ${channels}. Supply an iptv-org channel list, or disable run_at_startup and clear schedule for serve-only mode.`)
     }
   } else {
     console.log('Serve-only mode: no grabs enabled. guide.xml will return 404 until a guide exists.')
@@ -61,12 +75,22 @@ try {
   const upstream = require('/epg/pm2.config.js')
   const apps = upstream.apps
     .filter(app => schedule || app.name !== 'grab')
-    .map(app => ({ ...app, cwd: '/epg', env: { ...env, SITES: '' } }))
+    .map(app => {
+      if (autoGenerate && app.name !== 'serve') {
+        const selector = '--channels=public/channels.xml'
+        if (!app.script.includes(selector)) {
+          throw new Error('Upstream PM2 channel selector changed; refusing to grab an unintended list')
+        }
+        app = { ...app, script: app.script.replace(selector, '--channels=public/us.channels.xml') }
+      }
+      return { ...app, cwd: '/epg', env: { ...env, SITES: '' } }
+    })
   fs.writeFileSync('/data/pm2.config.json', JSON.stringify({ apps }, null, 2))
-} catch (error) {
+}
+main().catch(error => {
   console.error(`IPTV-org EPG startup failed: ${error.message}`)
   process.exit(1)
-}
+})
 NODE
 
 exec pm2-runtime /data/pm2.config.json
