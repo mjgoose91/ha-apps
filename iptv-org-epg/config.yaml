@@ -1,0 +1,26 @@
+name: "IPTV-org EPG"
+version: "0.1.0"
+slug: "iptv-org-epg"
+description: "Generate and serve XMLTV guides with the iptv-org EPG grabber."
+url: "https://github.com/mjgoose91/ha-apps"
+arch:
+  - aarch64
+  - amd64
+startup: application
+boot: auto
+init: true
+ports:
+  3000/tcp: 3000
+ports_description:
+  3000/tcp: "XMLTV HTTP server (no authentication)"
+webui: "http://[HOST]:[PORT:3000]"
+options:
+  run_at_startup: false
+  schedule: ""
+  guide_days: 3
+  concurrency: 1
+schema:
+  run_at_startup: bool
+  schedule: str
+  guide_days: "int(1,14)"
+  concurrency: "int(1,32)"
