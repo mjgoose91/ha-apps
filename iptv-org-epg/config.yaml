@@ -1,5 +1,5 @@
 name: "IPTV-org EPG"
-version: "0.2.0"
+version: "0.2.1"
 slug: "iptv-org-epg"
 description: "Generate and serve XMLTV guides with the iptv-org EPG grabber."
 url: "https://github.com/mjgoose91/ha-apps"

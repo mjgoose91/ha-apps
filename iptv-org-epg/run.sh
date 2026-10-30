@@ -93,4 +93,6 @@ main().catch(error => {
 })
 NODE
 
+export NODE_OPTIONS="--max-old-space-size=8192"
+
 exec pm2-runtime /data/pm2.config.json
